@@ -12,12 +12,10 @@ At scheduling time $t_0$, the scheduler observes a set of eligible queued jobs a
 
 $$
 J = \text{set of eligible queued jobs}
-
 $$
 
 $$
 N = \text{set of available cluster nodes}
-
 $$
 
 ### Parameters
@@ -26,29 +24,24 @@ For each job $j \in J$:
 
 $$
 g_j = \text{GPU demand}
-
 $$
 
 $$
 d_j = \text{duration}
-
 $$
 
 $$
 p_j = \text{priority or value}
-
 $$
 
 $$
 \ell_j = \text{deadline}
-
 $$
 
 For each node $i \in N$:
 
 $$
 c_i = \text{currently available GPUs}
-
 $$
 
 The current scheduling time is $t_0$. The decision step used to estimate one-period waiting impact is $\Delta$. The deadline penalty weight is $\beta \ge 0$.
@@ -59,28 +52,24 @@ If job $j$ starts now:
 
 $$
 L_j^{start} = \max(0, t_0 + d_j - \ell_j)
-
 $$
 
 If job $j$ waits at least one decision step:
 
 $$
 L_j^{wait} = \max(0, t_0 + \Delta + d_j - \ell_j)
-
 $$
 
 ### Decision variables
 
 $$
 x_{ij} \in \mathbb{Z}_+
-
 $$
 
 number of GPUs from node $i$ assigned to job $j$.
 
 $$
 y_j \in \{0,1\}
-
 $$
 
 equals 1 if job $j$ starts now, and 0 otherwise.
@@ -94,7 +83,6 @@ $$
 \beta \sum_{j \in J} L_j^{start} y_j
 -
 \beta \sum_{j \in J} L_j^{wait}(1-y_j)
-
 $$
 
 The first term rewards starting high-value work. The second term penalizes jobs that start but still finish late. The third term penalizes jobs whose waiting decision increases deadline risk.
@@ -108,7 +96,6 @@ A selected job must receive its full GPU demand:
 $$
 \sum_{i \in N} x_{ij} = g_j y_j
 \qquad \forall j \in J
-
 $$
 
 Node capacity cannot be exceeded:
@@ -116,7 +103,6 @@ Node capacity cannot be exceeded:
 $$
 \sum_{j \in J} x_{ij} \le c_i
 \qquad \forall i \in N
-
 $$
 
 Variable domains:
@@ -124,13 +110,11 @@ Variable domains:
 $$
 x_{ij} \in \mathbb{Z}_+
 \qquad \forall i \in N, j \in J
-
 $$
 
 $$
 y_j \in \{0,1\}
 \qquad \forall j \in J
-
 $$
 
 ## 2. Operational Decision Budget
@@ -163,14 +147,12 @@ A time-indexed model introduces variables such as:
 
 $$
 y_{jt} = 1
-
 $$
 
 if job $j$ starts at time $t$, and
 
 $$
 x_{ijt}
-
 $$
 
 for GPUs assigned from node $i$ to job $j$ at time $t$.
@@ -193,7 +175,6 @@ A future metric can track whether a job of size $k$ is blocked despite enough ag
 
 $$
 \sum_i c_i \ge k \quad \text{and} \quad \max_i c_i < k
-
 $$
 
 This is a simple same-node version of the fragmentation signal. Later versions can generalize it to rack locality, topology groups, GPU types, and multi-node placement patterns.

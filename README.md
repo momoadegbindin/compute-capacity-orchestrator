@@ -2,6 +2,8 @@
 
 **Optimization and simulation for GPU workload scheduling**
 
+![Compute Capacity Orchestrator hero](assets/cco-hero.png)
+
 Compute Capacity Orchestrator (CCO) is a public research and engineering project for studying how scarce GPU capacity should be allocated when jobs arrive over time, wait in queues, and compete for limited accelerator resources.
 
 The project models a realistic scheduling setting: some jobs need one GPU, some need a group of GPUs to start together, and different workload classes have different priorities, deadlines, and runtime uncertainty. It compares fast scheduling rules, mathematical optimization models, and hybrid policies that must return decisions within a practical time budget.
@@ -21,7 +23,7 @@ This project studies that tradeoff directly by combining scheduling models, queu
 ## Why This Matters
 
 Scarce compute is more than an engineering detail, it is a business constraint. Whether the setting is AI training, inference serving, cloud capacity, robotics simulation, evaluation pipelines, or internal research workloads, poor scheduling turns expensive infrastructure into waiting time, missed deadlines, fragmented capacity, and lost throughput.
-
+At AI-infrastructure scale, the same problem becomes a performance-modeling question: how should scarce accelerator capacity be scheduled when solver latency, GPU locality, interconnect structure, and scale-up versus scale-out choices all affect throughput and service risk?
 CCO is built to quantify these structural tradeoffs before changing a real system:
 
 * **Infrastructure operations:** improve utilization without creating fragmentation that blocks large jobs.
@@ -130,7 +132,6 @@ $$
 J &= \text{set of eligible queued jobs}, \\  
 N &= \text{set of available cluster nodes}.  
 \end{aligned}
-
 $$
 
 ### Parameters
@@ -144,14 +145,12 @@ d_j &= \text{duration of job } j, \\
 p_j &= \text{priority or value of job } j, \\  
 \ell_j &= \text{deadline of job } j.  
 \end{aligned}
-
 $$
 
 For each node $i \in N$:
 
 $$
 c_i = \text{number of currently available GPUs on node } i.
-
 $$
 
 The current scheduling time is $t_0$.
@@ -162,14 +161,12 @@ If job $j$ starts now, its lateness is known before optimization:
 
 $$
 L_j = \max \{0; t_0 + d_j - \ell_j\}.
-
 $$
 
 The deadline penalty is:
 
 $$
 q_j = \beta L_j,
-
 $$
 
 where $\beta \ge 0$ controls how strongly late completion is penalized. When $\beta = 0$, deadline penalties are disabled.
@@ -183,14 +180,12 @@ x_{ij} &\in \mathbb{Z}_+
 y_j &\in {0,1}  
 && \text{1 if job } j \text{ starts now, 0 otherwise.}  
 \end{aligned}
-
 $$
 
 ### Model
 
 $$
 \begin{aligned} \max \quad & \sum_{j \in J} (p_j - q_j)y_j \\[4pt] \text{s.t.} \quad & \sum_{i \in N} x_{ij} = g_j y_j && \forall j \in J, \\[4pt] & \sum_{j \in J} x_{ij} \le c_i && \forall i \in N, \\[4pt] & x_{ij} \in \mathbb{Z}_+ && \forall i \in N, j \in J, \\[4pt] & y_j \in \{0,1\} && \forall j \in J. \end{aligned}
-
 $$
 
 The first constraint enforces all-or-nothing GPU allocation: a job that starts must receive its full GPU demand, while a job that does not start receives no GPUs. The second constraint ensures that the total number of GPUs allocated from any node does not exceed that node’s currently available GPU capacity.
@@ -210,16 +205,16 @@ The goal is not to favor one method in isolation. The goal is to compare decisio
 
 ## 7. Project Roadmap
 
-* **Phase 1 — Core harness:** schemas, queue state, cluster state, baseline scheduling rules, exact snapshot optimization, validation, metrics, tests, and a runnable dashboard.
-* **Phase 2 — Exact optimization:** snapshot and time-indexed MIP formulations, rolling-horizon scheduling, GPU capacity constraints, release-time constraints, deadline penalties, and reference solver integrations.
-* **Phase 3 — Hybrid scheduling:** bounded runtime, fallback policies, solver-status handling, and comparison of solution quality against scheduler latency.
-* **Phase 4 — Topology and workload realism:** GPU types, node groups, multi-node placement, topology penalties, and workload classes such as inference, evaluation, simulation, and training.
-* **Phase 5 — Policy laboratory:** stochastic demand scenarios, capacity drops, quota policies, cloud-burst options, and dashboard-based policy comparison.
-* **Phase 6 — Advanced optimization research:** column generation for large placement-pattern models and Benders-style decomposition for planning, recourse, and feasibility separation.
+* **Phase 1 - Core harness:** schemas, queue state, cluster state, baseline scheduling rules, exact snapshot optimization, validation, metrics, tests, and a runnable dashboard.
+* **Phase 2 - Exact optimization:** snapshot and time-indexed MIP formulations, rolling-horizon scheduling, GPU capacity constraints, release-time constraints, deadline penalties, and reference solver integrations.
+* **Phase 3 - Hybrid scheduling:** bounded runtime, fallback policies, solver-status handling, and comparison of solution quality against scheduler latency.
+* **Phase 4 - Topology and workload realism:** GPU types, H100-class accelerator pools, NVLink domains, node groups, rack locality, InfiniBand/Ethernet fabric effects, multi-node placement, topology penalties, and workload classes such as inference, evaluation, simulation, and training.
+* **Phase 5 - Policy laboratory:** stochastic demand scenarios, capacity drops, quota policies, cloud-burst options, and dashboard-based policy comparison.
+* **Phase 6 - Advanced optimization research:** column generation for large placement-pattern models and Benders-style decomposition for planning, recourse, and feasibility separation.
 
 ## 8. Current Implementation Status
 
-**Current phase:** Phase 1 — Core Scheduling Harness
+**Current phase:** Phase 1 - Core Scheduling Harness
 
 The current release establishes the core scheduling and simulation harness. It includes stable data contracts, a scheduler interface, decision validation, baseline and exact snapshot schedulers, state updates, metrics, tests, and a Streamlit dashboard for inspecting snapshot and simulation experiments.
 

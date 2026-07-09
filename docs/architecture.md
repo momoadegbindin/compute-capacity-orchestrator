@@ -116,7 +116,7 @@ The architecture is prepared for several future layers.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Time-indexed MIP                  | Add a scheduler that solves over a short planning horizon.                                      |
 | Rolling-horizon control           | Reuse the simulation loop and call a planning scheduler at each time step.                      |
-| Topology-aware placement          | Extend node, topology, and assignment costs without changing the scheduler interface.           |
+| Topology-aware placement          | Extend node, topology, and assignment costs to represent GPU type, NVLink locality, rack placement, InfiniBand/Ethernet fabric effects, and scale-up versus scale-out placement tradeoffs without changing the scheduler interface. |         |
 | Stochastic scenarios              | Generate multiple future arrival paths and evaluate policies under scenario stress.             |
 | Hybrid bounded-time scheduling    | Wrap stronger optimizers with timeout, gap, and fallback behavior.                              |
 | Decomposition / column generation | Replace monolithic optimization internals while preserving the same external decision contract. |
