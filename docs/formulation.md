@@ -69,7 +69,7 @@ $$
 number of GPUs from node $i$ assigned to job $j$.
 
 $$
-y_j \in \{0,1\}
+y_j \in \\{0,1\\}
 $$
 
 equals 1 if job $j$ starts now, and 0 otherwise.
