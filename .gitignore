@@ -216,3 +216,24 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Python
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+
+# Packaging
+
+# IDEs
+.idea/
+.vscode/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+*.pyc

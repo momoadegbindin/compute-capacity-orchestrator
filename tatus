@@ -1,0 +1,252 @@
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex 83972fa..d0e6dfe 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -216,3 +216,24 @@[m [m__marimo__/[m
+ [m
+ # Streamlit[m
+ .streamlit/secrets.toml[m
+[32m+[m[32m# Python[m
+[32m+[m[32m*.py[cod][m
+[32m+[m[32m*.pyo[m
+[32m+[m[32m*.pyd[m
+[32m+[m
+[32m+[m[32m# Virtual environments[m
+[32m+[m[32m.venv/[m
+[32m+[m
+[32m+[m[32m# Packaging[m
+[32m+[m
+[32m+[m[32m# IDEs[m
+[32m+[m[32m.idea/[m
+[32m+[m[32m.vscode/[m
+[32m+[m
+[32m+[m[32m# Notebooks[m
+[32m+[m[32m.ipynb_checkpoints/[m
+[32m+[m
+[32m+[m[32m# OS[m
+[32m+[m[32m.DS_Store[m
+[32m+[m[32mThumbs.db[m
+[32m+[m[32m*.pyc[m
+\ No newline at end of file[m
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 0057933..a270002 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,2 +1,266 @@[m
+[31m-# compute-capacity-orchestrator[m
+[31m-Production-style optimization and simulation sandbox for GPU workload scheduling, queueing, and compute-capacity policy evaluation.[m
+[32m+[m[32m# Compute Capacity Orchestrator[m
+[32m+[m
+[32m+[m[32m**Optimization and simulation for GPU workload scheduling**[m
+[32m+[m
+[32m+[m[32mCompute Capacity Orchestrator (CCO) is a public research and engineering project for studying how scarce GPU capacity should be allocated when jobs arrive over time, wait in queues, and compete for limited accelerator resources.[m
+[32m+[m
+[32m+[m[32mThe project models a realistic scheduling setting: some jobs need one GPU, some need a group of GPUs to start together, and different workload classes have different priorities, deadlines, and runtime uncertainty. It compares fast scheduling rules, mathematical optimization models, and hybrid policies that must return decisions within a practical time budget.[m
+[32m+[m
+[32m+[m[32mThe goal is to make the central tradeoff visible: keep expensive accelerators busy while avoiding queue growth, capacity fragmentation, delayed high-priority work, and slow scheduler decisions.[m
+[32m+[m
+[32m+[m[32m## Core Thesis[m
+[32m+[m
+[32m+[m[32mCCO is a production-oriented scheduling framework developed in a controlled simulation environment before integration with real cluster telemetry and execution systems. The problem it addresses is a dynamic decision problem under scarcity and uncertainty.[m
+[32m+[m
+[32m+[m[32mAt each decision point in time, the scheduler must choose which jobs start now, which jobs wait, and where running jobs should be placed. Those choices affect more than short-term utilization. They affect queue growth, wait time, deadline risk, cluster fragmentation, and the ability to run large jobs that need many GPUs at once. Placement also matters: two schedules with the same number of GPUs can behave very differently if one keeps related GPUs close together and the other spreads them across a weaker part of the cluster fabric.[m
+[32m+[m
+[32m+[m[32mA simple rule can make fast decisions, but it may waste capacity structure. An exact optimization model can produce better schedules on small instances, but it may become too slow as the problem grows. A practical scheduler has to balance decision quality against decision time.[m
+[32m+[m
+[32m+[m[32mThis project studies that tradeoff directly by combining scheduling models, queue simulation, topology-aware placement, and policy evaluation in one system.[m
+[32m+[m
+[32m+[m[32m## Why This Matters[m
+[32m+[m
+[32m+[m[32mScarce compute is more than an engineering detail, it is a business constraint. Whether the setting is AI training, inference serving, cloud capacity, robotics simulation, evaluation pipelines, or internal research workloads, poor scheduling turns expensive infrastructure into waiting time, missed deadlines, fragmented capacity, and lost throughput.[m
+[32m+[m
+[32m+[m[32mCCO is built to quantify these structural tradeoffs before changing a real system:[m
+[32m+[m
+[32m+[m[32m* **Infrastructure operations:** improve utilization without creating fragmentation that blocks large jobs.[m
+[32m+[m[32m* **Platform engineering:** balance short latency-sensitive jobs against long-running training, evaluation, or simulation workloads.[m
+[32m+[m[32m* **Capacity planning:** test sudden demand spikes, unexpected node failures, quota policies, and cloud-burst options before deployment.[m
+[32m+[m[32m* **Operations research:** compare fast heuristics, metaheuristics, exact optimization, and hybrid methods under the same simulation harness.[m
+[32m+[m[32m* **Leadership and finance:** connect scheduling policy to measurable outcomes such as throughput, wait time, service risk, and infrastructure efficiency.[m
+[32m+[m
+[32m+[m[32mA static optimization model is not enough by itself. To understand its actual production impact, a scheduling policy must be evaluated continuously inside a queueing system under variable demand pressure, strict solver latency budgets, and complex placement constraints.[m
+[32m+[m
+[32m+[m[32m## How the System Works[m
+[32m+[m
+[32m+[m[32mCCO strictly separates the standalone scheduling core from the discrete-time simulation loop.[m
+[32m+[m[32mThe scheduling core operates as a pure decision engine. It receives a snapshot of the current system: waiting jobs, running jobs, available cluster capacity, and topology constraints. Then, it returns a deterministic allocation plan: which jobs should start now, where they should run, and which jobs should remain queued.[m
+[32m+[m
+[32m+[m[32mThe structural execution path of this standalone scheduler component is mapped out in the flowchart below:[m
+[32m+[m
+[32m+[m[32m```mermaid[m
+[32m+[m[32mflowchart LR[m
+[32m+[m[32m    %% 1. Input Stream[m
+[32m+[m[32m    subgraph W[Workloads][m
+[32m+[m[32m       direction TB[m
+[32m+[m[32m       A@{ shape: docs, label: "Job arrivals"} --> B[(Waiting queue)][m
+[32m+[m[32m    end[m
+[32m+[m[41m  [m
+[32m+[m[32m    S(Cluster capacity<br>& network topology) --> D("S<br>C<br>H<br>E<br>D<br>U<br>L<br>E<br>R<br><br>I<br>N<br>T<br>E<br>R<br>F<br>A<br>C<br>E")[m
+[32m+[m[32m    B --> D[m
+[32m+[m
+[32m+[m[32m    %% 2. Policy Choice[m
+[32m+[m[32m    subgraph P[Scheduling policies][m
+[32m+[m[32m        direction RL[m
+[32m+[m[32m        P1(Greedy rules)[m
+[32m+[m[32m        P2(Exact / MIP model)[m
+[32m+[m[32m        P3(Metaheuristics)[m
+[32m+[m[32m        P4(Hybrid bounded-time<br>policy)[m
+[32m+[m[32m        P5(Stochastic models<br>with recourse)[m[41m [m
+[32m+[m[32m        P6(Robust optimization<br>formulations)[m
+[32m+[m[32m    end[m
+[32m+[m[32m    D --> P[m
+[32m+[m[41m  [m
+[32m+[m[32m    %% 3. Output Execution[m
+[32m+[m[32m    subgraph Decisions[Execution engine][m
+[32m+[m[32m        direction RL[m
+[32m+[m[32m        E(Decision<br>Executor)[m
+[32m+[m[32m        G(Keep waiting /<br>defer jobs)[m
+[32m+[m[32m        F(Allocate &<br>run jobs)[m
+[32m+[m[32m        H(Update<br>cluster state)[m
+[32m+[m[32m        E --> G[m
+[32m+[m[32m        E --> F[m
+[32m+[m[32m        F --> H[m
+[32m+[m[32m    end[m[41m [m
+[32m+[m[32m    P -->  V("S<br>C<br>H<br>E<br>D<br>U<br>L<br>E<br>R<br><br>V<br>A<br>L<br>I<br>D<br>A<br>T<br>O<br>R")[m
+[32m+[m[32m    V --> E[m
+[32m+[m[41m  [m
+[32m+[m[32m    %% 4. Metrics Logging[m
+[32m+[m[32m    subgraph Analytics[Metrics & telemetry][m
+[32m+[m[32m        direction RL[m
+[32m+[m	[32m    I(Event logs<br>& metrics)[m
+[32m+[m	[32m    I --> J(Dashboard<br>& reports)[m
+[32m+[m	[32mend[m
+[32m+[m	[32mE --> I[m
+[32m+[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mBefore a scheduling decision is applied, CCO validates it against the snapshot that produced it. The validator checks that all referenced jobs and nodes exist, every queued job is accounted for, started jobs receive their full GPU demand, and node capacity is not exceeded. A validated decision is then passed to the decision executor, which updates queue and cluster state and emits events for the metrics layer.[m
+[32m+[m
+[32m+[m[32mThe simulation loop provides the temporal environment to stress-test these scheduling policies. It loads a static workload scenario, manages the clock ticks, streams upcoming job arrivals into the waiting queue, and invokes the standalone scheduler. The simulator then updates the living cluster state based on the scheduler's choices and writes out execution history. This isolation guarantees that policies are thoroughly evaluated before integration with real-time cluster telemetry.[m
+[32m+[m[32mThe internal clock loop and data mutations managed by the simulation engine are trace-mapped in the timeline diagram below:[m
+[32m+[m
+[32m+[m[32m```mermaid[m
+[32m+[m[32mflowchart LR[m
+[32m+[m[32m    %% 1. Ingestion Phase[m
+[32m+[m[32m     Start[Initialize Simulation <br> & <br>Load Workload Scenario ][m
+[32m+[m
+[32m+[m[32m    %% 2. Clean Vertical Loop Body[m
+[32m+[m[32m    subgraph Engine [Simulation Clock Loop][m
+[32m+[m[32m        direction TB[m
+[32m+[m[32m        Tick(Time Loop Step) --> Stream(Stream Job Arrivals<br>From Scenario)[m
+[32m+[m[32m        Stream --> Core[[Invoke Standalone<br>Scheduler Component]][m
+[32m+[m[32m        Core --> Mutate(Update Cluster State<br>& Log Events)[m
+[32m+[m[32m        Mutate -->|Next Tick| Tick[m
+[32m+[m[32m    end[m
+[32m+[m
+[32m+[m[32m    %% 3. Pure Analytical Outflow[m
+[32m+[m[32m    Start --> Tick[m
+[32m+[m[32m    Mutate -->|Simulation Complete| Eval[Compile Metrics & Telemetry <br> + <br> Generate Evaluation Profiles<br>& Performance Traces][m
+[32m+[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mThe repository layout is organized around five isolated layers:[m
+[32m+[m
+[32m+[m[32m* Workload Generation: creates reproducible job streams, cluster hardware structures, and historical demand scenarios.[m
+[32m+[m[32m* Scheduling Core: exposes a unified interface for pluggable greedy rules, exact optimization models, metaheuristics, and hybrid bounded-time policies, multi-stage stochastic formulations with recourse, and robust optimization models.[m
+[32m+[m[32m* Decision Validation and State Management: validates proposed scheduling decisions, applies accepted decisions, starts jobs, keeps waiting jobs queued, releases completed work, and updates cluster state.[m
+[32m+[m[32m* Simulation Loop: advances time and repeatedly calls the scheduler to evaluate policy behavior under controlled conditions.[m
+[32m+[m[32m* Metrics Layer: measures utilization, queue length, wait time, deadline risk, placement quality, scheduler runtime, and value captured.[m
+[32m+[m
+[32m+[m[32m## 5. Mathematical Starting Point[m
+[32m+[m
+[32m+[m[32mThe first model is a single-decision scheduling snapshot. At the current scheduling time $t_0$, the scheduler observes the eligible waiting jobs and the currently available GPU capacity. It chooses which jobs start now and how many GPUs each selected job receives from each node.[m
+[32m+[m
+[32m+[m[32m### Sets[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32m\begin{aligned}[m[41m  [m
+[32m+[m[32mJ &= \text{set of eligible queued jobs}, \\[m[41m  [m
+[32m+[m[32mN &= \text{set of available cluster nodes}.[m[41m  [m
+[32m+[m[32m\end{aligned}[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32m### Parameters[m
+[32m+[m
+[32m+[m[32mFor each job $j \in J$:[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32m\begin{aligned}[m[41m  [m
+[32m+[m[32mg_j &= \text{number of GPUs required by job } j, \\[m[41m  [m
+[32m+[m[32md_j &= \text{duration of job } j, \\[m[41m  [m
+[32m+[m[32mp_j &= \text{priority or value of job } j, \\[m[41m  [m
+[32m+[m[32m\ell_j &= \text{deadline of job } j.[m[41m  [m
+[32m+[m[32m\end{aligned}[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32mFor each node $i \in N$:[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32mc_i = \text{number of currently available GPUs on node } i.[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32mThe current scheduling time is $t_0$.[m
+[32m+[m
+[32m+[m[32m### Derived Parameters[m
+[32m+[m
+[32m+[m[32mIf job $j$ starts now, its lateness is known before optimization:[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32mL_j = \max \{0; t_0 + d_j - \ell_j\}.[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32mThe deadline penalty is:[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32mq_j = \beta L_j,[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32mwhere $\beta \ge 0$ controls how strongly late completion is penalized. When $\beta = 0$, deadline penalties are disabled.[m
+[32m+[m
+[32m+[m[32m### Decision Variables[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32m\begin{aligned}[m[41m  [m
+[32m+[m[32mx_{ij} &\in \mathbb{Z}_+[m[41m  [m
+[32m+[m[32m&& \text{number of GPUs from node } i \text{ assigned to job } j, \\[m[41m  [m
+[32m+[m[32my_j &\in {0,1}[m[41m  [m
+[32m+[m[32m&& \text{1 if job } j \text{ starts now, 0 otherwise.}[m[41m  [m
+[32m+[m[32m\end{aligned}[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32m### Model[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m[32m\begin{aligned} \max \quad & \sum_{j \in J} (p_j - q_j)y_j \\[4pt] \text{s.t.} \quad & \sum_{i \in N} x_{ij} = g_j y_j && \forall j \in J, \\[4pt] & \sum_{j \in J} x_{ij} \le c_i && \forall i \in N, \\[4pt] & x_{ij} \in \mathbb{Z}_+ && \forall i \in N, j \in J, \\[4pt] & y_j \in \{0,1\} && \forall j \in J. \end{aligned}[m
+[32m+[m
+[32m+[m[32m$$[m
+[32m+[m
+[32m+[m[32mThe first constraint enforces all-or-nothing GPU allocation: a job that starts must receive its full GPU demand, while a job that does not start receives no GPUs. The second constraint ensures that the total number of GPUs allocated from any node does not exceed that node’s currently available GPU capacity.[m
+[32m+[m
+[32m+[m[32mThis draft is not yet a full time-indexed scheduling model. It is the smallest clean model needed to define the core allocation decision. Later versions extend the same structure to a planning horizon, topology-aware placement(NVLink vs. InfiniBand hops), GPU types, stochastic scenarios, and decomposition methods.[m
+[32m+[m
+[32m+[m[32m## 6. Scheduling Policies[m
+[32m+[m
+[32m+[m[32mCCO evaluates scheduling policies across a staged progression of complexity:[m
+[32m+[m
+[32m+[m[32m* **Greedy baseline:** fast deterministic rules such as shortest processing time, earliest deadline, priority order, or value density. These policies are easy to explain, cheap to run, and useful as both baselines and fallbacks.[m
+[32m+[m[32m* **Metaheuristics:** local-search methods such as tabu search, simulated annealing, or large-neighborhood search. These methods can improve placement quality without requiring a full exact solve at every decision point.[m
+[32m+[m[32m* **Exact optimization model:** MIP-based formulations used as reference models on small and medium instances. These models clarify the structure of the scheduling problem and provide high-quality solutions when runtime is acceptable.[m
+[32m+[m[32m* **Hybrid bounded-time scheduler:** a production-oriented policy that runs a stronger method under a strict time budget and falls back to a fast heuristic when the stronger method is too slow or fails to return a useful solution.[m
+[32m+[m
+[32m+[m[32mThe goal is not to favor one method in isolation. The goal is to compare decision quality, scheduler runtime, queue behavior, and operational impact under the same evaluation harness.[m
+[32m+[m
+[32m+[m[32m## 7. Project Roadmap[m
+[32m+[m
+[32m+[m[32m* **Phase 1 — Core harness:** schemas, queue state, cluster state, baseline scheduling rules, exact snapshot optimization, validation, metrics, tests, and a runnable dashboard.[m
+[32m+[m[32m* **Phase 2 — Exact optimization:** snapshot and time-indexed MIP formulations, rolling-horizon scheduling, GPU capacity constraints, release-time constraints, deadline penalties, and reference solver integrations.[m
+[32m+[m[32m* **Phase 3 — Hybrid scheduling:** bounded runtime, fallback policies, solver-status handling, and comparison of solution quality aga
