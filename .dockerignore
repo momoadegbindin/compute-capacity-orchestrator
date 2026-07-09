@@ -1,5 +1,7 @@
 .git
 .venv
+venv
+env
 __pycache__
 *.pyc
 .pytest_cache
@@ -7,3 +9,7 @@ __pycache__
 .ruff_cache
 .ipynb_checkpoints
 .streamlit/secrets.toml
+
+tests
+notebooks
+*.ipynb
