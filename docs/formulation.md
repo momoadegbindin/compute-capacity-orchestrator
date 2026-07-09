@@ -77,12 +77,7 @@ equals 1 if job $j$ starts now, and 0 otherwise.
 ### Objective
 
 $$
-\max
-\sum_{j \in J} p_j y_j
--
-\beta \sum_{j \in J} L_j^{start} y_j
--
-\beta \sum_{j \in J} L_j^{wait}(1-y_j)
+\max \sum_{j \in J} p_j y_j - \beta \sum_{j \in J} L_j^{start} y_j - \beta \sum_{j \in J} L_j^{wait}(1-y_j)
 $$
 
 The first term rewards starting high-value work. The second term penalizes jobs that start but still finish late. The third term penalizes jobs whose waiting decision increases deadline risk.
@@ -113,7 +108,7 @@ x_{ij} \in \mathbb{Z}_+
 $$
 
 $$
-y_j \in \{0,1\}
+y_j \in \\{0,1\\}
 \qquad \forall j \in J
 $$
 

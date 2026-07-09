@@ -160,7 +160,7 @@ The current scheduling time is $t_0$.
 If job $j$ starts now, its lateness is known before optimization:
 
 $$
-L_j = \max \{0; t_0 + d_j - \ell_j\}.
+L_j = \max (0; t_0 + d_j - \ell_j).
 $$
 
 The deadline penalty is:
@@ -177,7 +177,7 @@ $$
 \begin{aligned}  
 x_{ij} &\in \mathbb{Z}_+  
 && \text{number of GPUs from node } i \text{ assigned to job } j, \\  
-y_j &\in {0,1}  
+y_j &\in \\{0,1\\}  
 && \text{1 if job } j \text{ starts now, 0 otherwise.}  
 \end{aligned}
 $$
@@ -185,8 +185,15 @@ $$
 ### Model
 
 $$
-\begin{aligned} \max \quad & \sum_{j \in J} (p_j - q_j)y_j \\[4pt] \text{s.t.} \quad & \sum_{i \in N} x_{ij} = g_j y_j && \forall j \in J, \\[4pt] & \sum_{j \in J} x_{ij} \le c_i && \forall i \in N, \\[4pt] & x_{ij} \in \mathbb{Z}_+ && \forall i \in N, j \in J, \\[4pt] & y_j \in \{0,1\} && \forall j \in J. \end{aligned}
+\begin{aligned} 
+\max \quad & \sum_{j \in J} (p_j - q_j)y_j \\\\[4pt] 
+\text{s.t.} \quad & \sum_{i \in N} x_{ij} = g_j y_j && \forall j \in J, \\\\[4pt] 
+& \sum_{j \in J} x_{ij} \le c_i && \forall i \in N, \\\\[4pt] 
+& x_{ij} \in \mathbb{Z}_+ && \forall i \in N, j \in J, \\\\[4pt] 
+& y_j \in \\{0,1\\} && \forall j \in J. 
+\end{aligned}
 $$
+
 
 The first constraint enforces all-or-nothing GPU allocation: a job that starts must receive its full GPU demand, while a job that does not start receives no GPUs. The second constraint ensures that the total number of GPUs allocated from any node does not exceed that node’s currently available GPU capacity.
 
