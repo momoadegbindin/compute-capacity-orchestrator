@@ -2,6 +2,8 @@
 
 **Optimization and simulation for GPU workload scheduling**
 
+[Live Demo](https://capacity-orchestrator.onrender.com)
+
 ![Compute Capacity Orchestrator hero](assets/cco-hero.png)
 
 Compute Capacity Orchestrator (CCO) is a public research and engineering project for studying how scarce GPU capacity should be allocated when jobs arrive over time, wait in queues, and compete for limited accelerator resources.
