@@ -29,29 +29,188 @@ from .snapshot_components import (
     render_small_snapshot_tables,
     render_large_snapshot_summary
 )
+from app.views import tooltips as tips
+from app.views.input_validation import validate_number, validate_order
+from app.views import control_config as cfg
 
 
-AVAILABLE_SCHEDULERS = (
-    "Greedy value density",
-    "Exact MIP snapshot",
-)
+def validate_snapshot_controls(
+    *,
+    scheduler_name: str,
+    experiment_size: str,
+    deadline_penalty_weight: float,
+    time_limit_seconds: int | float | None,
+    relative_gap: float | None,
+    node_a_available: int | None = None,
+    node_b_available: int | None = None,
+    seed: int | None = None,
+    num_nodes: int | None = None,
+    num_jobs: int | None = None,
+    gpu_demand_min: int | None = None,
+    gpu_demand_max: int | None = None,
+) -> list[str]:
+    """Validate snapshot controls before solving."""
+    errors: list[str] = []
 
-PLANNED_SCHEDULERS = (
-    "Hybrid bounded-time scheduler",
-    "Local search repair",
-    "Adaptive large neighborhood search",
-    "Column generation",
-    "Robust optimization",
-    "Stochastic model with recourse",
-)
-SMALL_EXPERIMENT = "Small"
-LARGE_EXPERIMENT = "Large"
+    errors.extend(
+        validate_number(
+            name="Deadline penalty weight",
+            value=deadline_penalty_weight,
+            min_value=cfg.DEADLINE_WEIGHT_MIN,
+            max_value=cfg.DEADLINE_WEIGHT_MAX,
+        )
+    )
 
-MAX_LARGE_NODES = 100
-MAX_LARGE_JOBS = 500
+    if experiment_size == cfg.SMALL_EXPERIMENT:
+        if node_a_available is None:
+            errors.append("node-a GPU availability is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="node-a GPUs",
+                    value=node_a_available,
+                    min_value=cfg.NODE_AVAILABLE_GPU_MIN,
+                    max_value=cfg.NODE_AVAILABLE_GPU_MAX,
+                    integer=True,
+                )
+            )
 
-DEFAULT_AVAILABLE_CAPACITY_RATIO = 0.70
-DEFAULT_TOTAL_GPUS_PER_NODE = 8
+        if node_b_available is None:
+            errors.append("node-b GPU availability is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="node-b GPUs",
+                    value=node_b_available,
+                    min_value=cfg.NODE_AVAILABLE_GPU_MIN,
+                    max_value=cfg.NODE_AVAILABLE_GPU_MAX,
+                    integer=True,
+                )
+            )
+
+    elif experiment_size == cfg.LARGE_EXPERIMENT:
+        if seed is None:
+            errors.append("Random seed is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Random seed",
+                    value=seed,
+                    min_value=cfg.SEED_MIN,
+                    max_value=cfg.SEED_MAX,
+                    integer=True,
+                )
+            )
+
+        if num_nodes is None:
+            errors.append("Number of nodes is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Number of nodes",
+                    value=num_nodes,
+                    min_value=cfg.NODE_MIN,
+                    max_value=cfg.NODE_MAX,
+                    integer=True,
+                )
+            )
+
+        if num_jobs is None:
+            errors.append("Number of jobs is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Number of jobs",
+                    value=num_jobs,
+                    min_value=cfg.JOB_MIN,
+                    max_value=cfg.LARGE_JOB_MAX,
+                    integer=True,
+                )
+            )
+
+        if gpu_demand_min is None:
+            errors.append("Minimum GPU demand is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Minimum GPU demand",
+                    value=gpu_demand_min,
+                    min_value=cfg.GPU_DEMAND_MIN_VALUE,
+                    max_value=cfg.GPU_DEMAND_MAX_VALUE,
+                    integer=True,
+                )
+            )
+
+        if gpu_demand_max is None:
+            errors.append("Maximum GPU demand is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Maximum GPU demand",
+                    value=gpu_demand_max,
+                    min_value=cfg.GPU_DEMAND_MIN_VALUE,
+                    max_value=cfg.GPU_DEMAND_MAX_VALUE,
+                    integer=True,
+                )
+            )
+
+        if gpu_demand_min is not None and gpu_demand_max is not None:
+            errors.extend(
+                validate_order(
+                    low_name="Minimum GPU demand",
+                    low_value=gpu_demand_min,
+                    high_name="maximum GPU demand",
+                    high_value=gpu_demand_max,
+                )
+            )
+
+        if (
+            scheduler_name == cfg.EXACT_MIP_SCHEDULER
+            and num_jobs is not None
+            and int(num_jobs) > cfg.PUBLIC_EXACT_SNAPSHOT_JOB_MAX
+        ):
+            errors.append(
+                "This snapshot is too large for Exact MIP in the public demo. "
+                f"Use at most {cfg.PUBLIC_EXACT_SNAPSHOT_JOB_MAX} jobs "
+                f"or switch to {cfg.GREEDY_SCHEDULER}."
+            )
+
+    else:
+        errors.append(f"Unknown experiment size: {experiment_size}.")
+
+    if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
+        if time_limit_seconds is None:
+            errors.append("Exact MIP time limit is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Exact MIP time limit",
+                    value=time_limit_seconds,
+                    min_value=cfg.MIP_TIME_LIMIT_MIN,
+                    max_value=cfg.MIP_TIME_LIMIT_MAX,
+                    integer=True,
+                )
+            )
+
+            if int(time_limit_seconds) > cfg.PUBLIC_EXACT_SNAPSHOT_TIME_LIMIT_MAX:
+                errors.append(
+                    "The live demo limits Exact MIP snapshot solves to "
+                    f"{cfg.PUBLIC_EXACT_SNAPSHOT_TIME_LIMIT_MAX} seconds."
+                )
+
+        if relative_gap is None:
+            errors.append("Relative gap is required for Exact MIP.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Relative gap",
+                    value=relative_gap,
+                    min_value=cfg.MIP_GAP_MIN,
+                    max_value=cfg.MIP_GAP_MAX,
+                )
+            )
+
+    return errors
 
 def build_scheduler(
     scheduler_name: str,
@@ -61,10 +220,10 @@ def build_scheduler(
 ):
     """Build a scheduler from the selected dashboard option."""
 
-    if scheduler_name == "Greedy value density":
+    if scheduler_name == cfg.GREEDY_SCHEDULER:
         return GreedyScheduler()
 
-    if scheduler_name == "Exact MIP snapshot":
+    if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
         return PyomoSnapshotScheduler(
             deadline_penalty_weight=deadline_penalty_weight,
             decision_step=1,
@@ -84,24 +243,26 @@ def render_snapshot_view() -> None:
 
         experiment_size = st.selectbox(
             "Experiment size",
-            options=(SMALL_EXPERIMENT, LARGE_EXPERIMENT),
+            options=cfg.EXPERIMENT_SIZES,
+            help=tips.EXPERIMENT_SIZE,
         )
         scheduler_name = st.selectbox(
             "Available scheduler",
-            options=AVAILABLE_SCHEDULERS,
+            options=cfg.AVAILABLE_SCHEDULERS,
+            help=tips.SCHEDULER,
         )
         with st.form("scenario_form"):
 
-
             deadline_penalty_weight = st.slider(
                 "Deadline penalty weight",
-                min_value=0.0,
-                max_value=10.0,
-                value=0.0,
+                min_value=cfg.DEADLINE_WEIGHT_MIN,
+                max_value=cfg.DEADLINE_WEIGHT_MAX,
+                value=cfg.SNAPSHOT_DEADLINE_WEIGHT_DEFAULT,
                 step=0.5,
+                help=tips.DEADLINE_WEIGHT,
             )
 
-            if scheduler_name == "Exact MIP snapshot":
+            if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
                 st.subheader("Exact MIP limits")
 
                 mip_col_1, mip_col_2 = st.columns(2)
@@ -109,26 +270,28 @@ def render_snapshot_view() -> None:
                 with mip_col_1:
                     time_limit_seconds = st.number_input(
                         "Time limit sec",
-                        min_value=1,
-                        max_value=120,
-                        value=15,
+                        #min_value=cfg.MIP_TIME_LIMIT_MIN,
+                        #max_value=cfg.MIP_TIME_LIMIT_MAX,
+                        value=cfg.SNAPSHOT_MIP_TIME_LIMIT_DEFAULT,
                         step=1,
+                        help=tips.MIP_TIME_LIMIT,
                     )
 
                 with mip_col_2:
                     relative_gap = st.number_input(
-                        "MIP gap",
-                        min_value=0.00,
-                        max_value=1.00,
-                        value=0.01,
+                        "Relative gap",
+                        #min_value=cfg.MIP_GAP_MIN,
+                        #max_value=cfg.MIP_GAP_MAX,
+                        value=cfg.SNAPSHOT_MIP_GAP_DEFAULT,
                         step=0.01,
                         format="%.3f",
+                        help=tips.MIP_GAP,
                     )
             else:
                 time_limit_seconds = None
                 relative_gap = None
 
-            if experiment_size == SMALL_EXPERIMENT:
+            if experiment_size == cfg.SMALL_EXPERIMENT:
                 st.subheader("Node capacity")
 
                 node_col_1, node_col_2 = st.columns(2)
@@ -136,19 +299,21 @@ def render_snapshot_view() -> None:
                 with node_col_1:
                     node_a_available = st.number_input(
                         "node-a GPUs",
-                        min_value=0,
-                        max_value=8,
+                        #min_value=cfg.NODE_AVAILABLE_GPU_MIN,
+                        #max_value=cfg.NODE_AVAILABLE_GPU_MAX,
                         value=5,
                         step=1,
+                        help=tips.NODE_AVAILABLE_GPUS,
                     )
 
                 with node_col_2:
                     node_b_available = st.number_input(
                         "node-b GPUs",
-                        min_value=0,
-                        max_value=8,
+                        #min_value=cfg.NODE_AVAILABLE_GPU_MIN,
+                        #max_value=cfg.NODE_AVAILABLE_GPU_MAX,
                         value=3,
                         step=1,
+                        help=tips.NODE_AVAILABLE_GPUS,
                     )
 
                 num_nodes = None
@@ -162,10 +327,11 @@ def render_snapshot_view() -> None:
 
                 seed = st.number_input(
                     "Random seed",
-                    min_value=0,
-                    max_value=100_000,
-                    value=27,
+                    #min_value=cfg.SEED_MIN,
+                    #max_value=cfg.SEED_MAX,
+                    value=cfg.SNAPSHOT_SEED_DEFAULT,
                     step=1,
+                    help=tips.SEED,
                 )
 
                 size_col_1, size_col_2 = st.columns(2)
@@ -173,19 +339,21 @@ def render_snapshot_view() -> None:
                 with size_col_1:
                     num_nodes = st.number_input(
                         "Nodes",
-                        min_value=1,
-                        max_value=MAX_LARGE_NODES,
+                        #min_value=cfg.NODE_MIN,
+                        #max_value=cfg.NODE_MAX,
                         value=20,
                         step=1,
+                        help=tips.NUM_NODES,
                     )
 
                 with size_col_2:
                     num_jobs = st.number_input(
                         "Jobs",
-                        min_value=1,
-                        max_value=MAX_LARGE_JOBS,
-                        value=100,
+                        #min_value=cfg.JOB_MIN,
+                        #max_value=cfg.LARGE_JOB_MAX,
+                        value=cfg.LARGE_JOB_DEFAULT,
                         step=10,
+                        help=tips.NUM_JOBS,
                     )
 
                 gpu_col_1, gpu_col_2 = st.columns(2)
@@ -193,26 +361,28 @@ def render_snapshot_view() -> None:
                 with gpu_col_1:
                     gpu_demand_min = st.number_input(
                         "Min GPUs",
-                        min_value=1,
-                        max_value=64,
-                        value=1,
+                        #min_value=cfg.GPU_DEMAND_MIN_VALUE,
+                        #max_value=cfg.GPU_DEMAND_MAX_VALUE,
+                        value=cfg.GPU_DEMAND_MIN_DEFAULT,
                         step=1,
+                        help=tips.GPU_DEMAND_MIN,
                     )
 
                 with gpu_col_2:
                     gpu_demand_max = st.number_input(
                         "Max GPUs",
-                        min_value=int(gpu_demand_min),
-                        max_value=64,
-                        value=max(int(gpu_demand_min), 16),
+                        #min_value=cfg.GPU_DEMAND_MIN_VALUE,
+                        #max_value=cfg.GPU_DEMAND_MAX_VALUE,
+                        value=cfg.GPU_DEMAND_MAX_DEFAULT,
                         step=1,
+                        help=tips.GPU_DEMAND_MAX,
                     )
 
                 node_a_available = None
                 node_b_available = None
 
             run_requested = st.form_submit_button("Run scheduler")
-
+            validation_message_box = st.empty()
         st.caption(
             "Later versions will add simulation, time-indexed planning, "
             "and policy comparison."
@@ -221,21 +391,46 @@ def render_snapshot_view() -> None:
         st.divider()
         st.caption("Planned engines")
 
-        for planned_scheduler in PLANNED_SCHEDULERS:
+        for planned_scheduler in cfg.PLANNED_SCHEDULERS:
             st.markdown(
                 f"<span style='color: #8b949e;'>• {planned_scheduler}</span>",
                 unsafe_allow_html=True,
             )
 
-    if "run_history" not in st.session_state:
-        st.session_state["run_history"] = []
+    if cfg.SNAPSHOT_RUN_HISTORY_KEY not in st.session_state:
+        st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY] = []
 
-    if "snapshot_last_result" not in st.session_state:
-        st.session_state["snapshot_last_result"] = None
+    if cfg.SNAPSHOT_LAST_RESULT_KEY not in st.session_state:
+        st.session_state[cfg.SNAPSHOT_LAST_RESULT_KEY] = None
 
     if run_requested:
+        validation_message_box.empty()
+        validation_errors = validate_snapshot_controls(
+            scheduler_name=scheduler_name,
+            experiment_size=experiment_size,
+            deadline_penalty_weight=float(deadline_penalty_weight),
+            time_limit_seconds=time_limit_seconds,
+            relative_gap=relative_gap,
+            node_a_available=node_a_available,
+            node_b_available=node_b_available,
+            seed=seed,
+            num_nodes=num_nodes,
+            num_jobs=num_jobs,
+            gpu_demand_min=gpu_demand_min,
+            gpu_demand_max=gpu_demand_max,
+        )
+
+        if validation_errors:
+            with validation_message_box.container():
+                # Build a single clean markdown list
+                error_bullet_points = "\n".join(f"- {error}" for error in validation_errors)
+                st.error(
+                    "### Please correct the following controls before running:\n"
+                    f"{error_bullet_points}"
+                )
+            return
         try:
-            if experiment_size == SMALL_EXPERIMENT:
+            if experiment_size == cfg.SMALL_EXPERIMENT:
                 snapshot = build_snapshot_with_capacity(
                     node_a_available=int(node_a_available),
                     node_b_available=int(node_b_available),
@@ -251,8 +446,8 @@ def render_snapshot_view() -> None:
                     duration_range=(1, 24),
                     priority_range=(1.0, 100.0),
                     deadline_slack_range=(-4, 24),
-                    total_gpus_per_node=DEFAULT_TOTAL_GPUS_PER_NODE,
-                    available_capacity_ratio=DEFAULT_AVAILABLE_CAPACITY_RATIO,
+                    total_gpus_per_node=cfg.TOTAL_GPUS_PER_NODE_DEFAULT,
+                    available_capacity_ratio=cfg.DEFAULT_AVAILABLE_CAPACITY_RATIO,
                 )
                 scenario_name = f"large-generated-{int(num_nodes)}x{int(num_jobs)}"
 
@@ -263,17 +458,18 @@ def render_snapshot_view() -> None:
                 relative_gap=relative_gap,
             )
 
-            decision = scheduler.solve(snapshot)
-            validate_decision(snapshot, decision)
+            with st.spinner("Solving scheduling snapshot..."):
+                decision = scheduler.solve(snapshot)
+                validate_decision(snapshot, decision)
 
-            metrics = compute_decision_metrics(
-                snapshot=snapshot,
-                decision=decision,
-                deadline_penalty_weight=deadline_penalty_weight,
-                decision_step=1,
-            )
+                metrics = compute_decision_metrics(
+                    snapshot=snapshot,
+                    decision=decision,
+                    deadline_penalty_weight=deadline_penalty_weight,
+                    decision_step=1,
+                )
 
-            st.session_state["snapshot_last_result"] = {
+            st.session_state[cfg.SNAPSHOT_LAST_RESULT_KEY] = {
                 "snapshot": snapshot,
                 "decision": decision,
                 "metrics": metrics,
@@ -281,7 +477,7 @@ def render_snapshot_view() -> None:
                 "experiment_size": experiment_size,
             }
 
-            st.session_state["run_history"].append(
+            st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY].append(
                 build_run_history_row(
                     snapshot=snapshot,
                     metrics=metrics,
@@ -290,14 +486,16 @@ def render_snapshot_view() -> None:
                     time_label=datetime.now().strftime("%H:%M:%S"),
                 )
             )
-
+            st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY] = (
+                st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY][-10:]
+            )
 
         except Exception as exc:
-            st.session_state["snapshot_last_result"] = None
+            st.session_state[cfg.SNAPSHOT_LAST_RESULT_KEY] = None
             st.error(f"Scheduler run failed: {exc}")
             st.stop()
 
-    last_result = st.session_state["snapshot_last_result"]
+    last_result = st.session_state[cfg.SNAPSHOT_LAST_RESULT_KEY]
 
     if last_result is None:
         st.caption("Click Run scheduler to generate the first result.")
@@ -323,7 +521,9 @@ def render_snapshot_view() -> None:
     assignments_df = build_assignments_dataframe(decision)
     capacity_df = build_capacity_dataframe(snapshot, assignments_df)
 
-    if experiment_size == SMALL_EXPERIMENT:
+
+
+    if experiment_size == cfg.SMALL_EXPERIMENT:
         render_small_snapshot_tables(
             jobs_df=jobs_df,
             nodes_df=nodes_df,

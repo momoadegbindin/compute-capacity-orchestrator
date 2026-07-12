@@ -11,6 +11,7 @@ from compute_capacity_orchestrator.schemas.schedule import (
     SchedulingSnapshot,
 )
 
+from app.views import control_config as cfg
 
 def build_jobs_dataframe(
     snapshot: SchedulingSnapshot,
@@ -415,11 +416,11 @@ def render_run_history() -> None:
 
     st.subheader("Recent scheduler runs")
 
-    if not st.session_state["run_history"]:
+    if not st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY]:
         st.caption("Run one or more schedulers to compare recent decisions.")
         return
 
-    run_history_df = pd.DataFrame(st.session_state["run_history"])
+    run_history_df = pd.DataFrame(st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY])
 
     st.dataframe(
         run_history_df.tail(10).iloc[::-1],
@@ -428,5 +429,5 @@ def render_run_history() -> None:
     )
 
     if st.button("Clear run history"):
-        st.session_state["run_history"] = []
+        st.session_state[cfg.SNAPSHOT_RUN_HISTORY_KEY] = []
         st.rerun()

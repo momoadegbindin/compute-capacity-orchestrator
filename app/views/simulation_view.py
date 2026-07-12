@@ -28,15 +28,124 @@ from app.views.simulation_components import (
     build_simulation_run_history_row,
 )
 
-AVAILABLE_SCHEDULERS = (
-    "Greedy value density",
-    "Exact MIP snapshot",
-)
+from app.views import tooltips as tips
+from app.views.input_validation import validate_number
+from app.views import control_config as cfg
 
-SIMULATION_LAST_RESULT_KEY = "simulation_last_result"
-SIMULATION_RUN_HISTORY_KEY = "simulation_run_history"
+def validate_simulation_controls(
+    *,
+    scheduler_name: str,
+    horizon: int,
+    num_nodes: int,
+    arrival_rate: float,
+    seed: int,
+    deadline_penalty_weight: float,
+    time_limit_seconds: int | float | None,
+    relative_gap: float | None,
+) -> list[str]:
+    """Validate simulation controls before running an experiment."""
+    errors: list[str] = []
 
-DEFAULT_TOTAL_GPUS_PER_NODE = 8
+    errors.extend(
+        validate_number(
+            name="Simulation horizon",
+            value=horizon,
+            min_value=cfg.SIMULATION_HORIZON_MIN,
+            max_value=cfg.SIMULATION_HORIZON_MAX,
+            integer=True,
+        )
+    )
+    errors.extend(
+        validate_number(
+            name="Number of nodes",
+            value=num_nodes,
+            min_value=cfg.NODE_MIN,
+            max_value=cfg.NODE_MAX,
+            integer=True,
+        )
+    )
+    errors.extend(
+        validate_number(
+            name="Arrival rate",
+            value=arrival_rate,
+            min_value=cfg.ARRIVAL_RATE_MIN,
+            max_value=cfg.ARRIVAL_RATE_MAX,
+        )
+    )
+    errors.extend(
+        validate_number(
+            name="Random seed",
+            value=seed,
+            min_value=cfg.SEED_MIN,
+            max_value=cfg.SEED_MAX,
+            integer=True,
+        )
+    )
+    errors.extend(
+        validate_number(
+            name="Deadline penalty weight",
+            value=deadline_penalty_weight,
+            min_value=cfg.DEADLINE_WEIGHT_MIN,
+            max_value=cfg.DEADLINE_WEIGHT_MAX,
+        )
+    )
+
+    expected_arrivals = float(arrival_rate) * int(horizon)
+
+    if expected_arrivals > cfg.PUBLIC_SIMULATION_EXPECTED_ARRIVALS_MAX:
+        errors.append(
+            "This simulation is too large for the public demo. "
+            f"Arrival rate × horizon is {expected_arrivals:.0f}; "
+            f"keep it at or below {cfg.PUBLIC_SIMULATION_EXPECTED_ARRIVALS_MAX}."
+        )
+
+    if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
+        if int(horizon) > cfg.PUBLIC_EXACT_SIMULATION_HORIZON_MAX:
+            errors.append(
+                "Exact MIP simulation solves one optimization model per step. "
+                f"Use horizon <= {cfg.PUBLIC_EXACT_SIMULATION_HORIZON_MAX} "
+                f"or switch to {cfg.GREEDY_SCHEDULER}."
+            )
+
+        if time_limit_seconds is None:
+            errors.append("Exact MIP time limit is required.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Exact MIP time limit per decision",
+                    value=time_limit_seconds,
+                    min_value=cfg.MIP_TIME_LIMIT_MIN,
+                    max_value=cfg.MIP_TIME_LIMIT_MAX,
+                    integer=True,
+                )
+            )
+
+            if int(time_limit_seconds) > cfg.PUBLIC_EXACT_SIMULATION_TIME_LIMIT_MAX:
+                errors.append(
+                    "The live demo limits Exact MIP to "
+                    f"{cfg.PUBLIC_EXACT_SIMULATION_TIME_LIMIT_MAX} seconds per decision."
+                )
+
+        if relative_gap is None:
+            errors.append("Relative gap is required for Exact MIP.")
+        else:
+            errors.extend(
+                validate_number(
+                    name="Relative gap",
+                    value=relative_gap,
+                    min_value=cfg.MIP_GAP_MIN,
+                    max_value=cfg.MIP_GAP_MAX,
+                )
+            )
+
+        if expected_arrivals > cfg.PUBLIC_EXACT_SIMULATION_EXPECTED_ARRIVALS_MAX:
+            errors.append(
+                "This Exact MIP simulation is too large for the public demo. "
+                f"Arrival rate × horizon is {expected_arrivals:.0f}; "
+                f"keep it at or below {cfg.PUBLIC_EXACT_SIMULATION_EXPECTED_ARRIVALS_MAX}."
+            )
+
+    return errors
 
 
 def build_simulation_scheduler(
@@ -47,10 +156,10 @@ def build_simulation_scheduler(
 ):
     """Build a scheduler for simulation experiments."""
 
-    if scheduler_name == "Greedy value density":
+    if scheduler_name == cfg.GREEDY_SCHEDULER:
         return GreedyScheduler()
 
-    if scheduler_name == "Exact MIP snapshot":
+    if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
         return PyomoSnapshotScheduler(
             deadline_penalty_weight=deadline_penalty_weight,
             decision_step=1,
@@ -73,8 +182,8 @@ def build_initial_simulation_state(
     nodes = tuple(
         ClusterNode(
             node_id=f"node-{node_index:03d}",
-            total_gpus=DEFAULT_TOTAL_GPUS_PER_NODE,
-            available_gpus=DEFAULT_TOTAL_GPUS_PER_NODE,
+            total_gpus=cfg.TOTAL_GPUS_PER_NODE_DEFAULT,
+            available_gpus=cfg.TOTAL_GPUS_PER_NODE_DEFAULT,
             topology_group=f"rack-{node_index // 4}",
         )
         for node_index in range(num_nodes)
@@ -141,23 +250,24 @@ def run_simulation_from_controls(
 def render_simulation_view() -> None:
     """Render the simulation dashboard shell."""
 
-    if SIMULATION_LAST_RESULT_KEY not in st.session_state:
-        st.session_state[SIMULATION_LAST_RESULT_KEY] = None
+    if cfg.SIMULATION_LAST_RESULT_KEY not in st.session_state:
+        st.session_state[cfg.SIMULATION_LAST_RESULT_KEY] = None
 
-    if SIMULATION_RUN_HISTORY_KEY not in st.session_state:
-        st.session_state[SIMULATION_RUN_HISTORY_KEY] = []
+    if cfg.SIMULATION_RUN_HISTORY_KEY not in st.session_state:
+        st.session_state[cfg.SIMULATION_RUN_HISTORY_KEY] = []
     with st.sidebar:
         st.header("Simulation controls")
         st.caption("Closed-loop scheduling over time")
 
         scheduler_name = st.selectbox(
             "Available scheduler",
-            options=AVAILABLE_SCHEDULERS,
+            options=cfg.AVAILABLE_SCHEDULERS,
             key="simulation_scheduler_name",
+            help=tips.SCHEDULER,
         )
 
         with st.form("simulation_form"):
-            if scheduler_name == "Exact MIP snapshot":
+            if scheduler_name == cfg.EXACT_MIP_SCHEDULER:
                 st.subheader("Exact MIP limits")
 
                 mip_col_1, mip_col_2 = st.columns(2)
@@ -165,20 +275,22 @@ def render_simulation_view() -> None:
                 with mip_col_1:
                     time_limit_seconds = st.number_input(
                         "Time limit sec",
-                        min_value=1,
-                        max_value=30,
-                        value=5,
+                        #min_value=cfg.MIP_TIME_LIMIT_MIN,
+                        #max_value=cfg.MIP_TIME_LIMIT_MAX,
+                        value=cfg.SIMULATION_MIP_TIME_LIMIT_DEFAULT,
                         step=1,
+                        help=tips.MIP_TIME_LIMIT,
                     )
 
                 with mip_col_2:
                     relative_gap = st.number_input(
-                        "MIP gap",
-                        min_value=0.00,
-                        max_value=0.10,
-                        value=0.05,
+                        "Relative gap",
+                        #min_value=cfg.MIP_GAP_MIN,
+                        #max_value=cfg.MIP_GAP_MAX,
+                        value=cfg.SIMULATION_MIP_GAP_DEFAULT,
                         step=0.01,
                         format="%.3f",
+                        help=tips.MIP_GAP,
                     )
             else:
                 time_limit_seconds = None
@@ -188,71 +300,99 @@ def render_simulation_view() -> None:
 
             num_nodes = st.number_input(
                 "Nodes",
-                min_value=1,
-                max_value=100,
-                value=8,
+                #min_value=cfg.NODE_MIN,
+                #max_value=cfg.NODE_MAX,
+                value=cfg.NODE_DEFAULT,
                 step=1,
+                help=tips.NUM_NODES,
             )
 
             st.subheader("Workload")
 
             horizon = st.number_input(
                 "Horizon",
-                min_value=1,
-                max_value=200,
-                value=50,
-                step=10,
+                #min_value=cfg.SIMULATION_HORIZON_MIN,
+                #max_value=cfg.SIMULATION_HORIZON_MAX,
+                value= cfg.SIMULATION_HORIZON_DEFAULT,
+                step=5,
+                help=tips.HORIZON,
             )
 
             arrival_rate = st.number_input(
                 "Arrival rate",
-                min_value=0.0,
-                max_value=20.0,
-                value=3.0,
-                step=0.5,
+                #min_value=cfg.ARRIVAL_RATE_MIN,
+                #max_value=cfg.ARRIVAL_RATE_MAX,
+                value=cfg.ARRIVAL_RATE_DEFAULT,
+                step=cfg.ARRIVAL_RATE_STEP,
                 format="%.1f",
+                help=tips.ARRIVAL_RATE,
             )
 
             seed = st.number_input(
                 "Random seed",
-                min_value=0,
-                max_value=100_000,
-                value=42,
+                #min_value=cfg.SEED_MIN,
+                #max_value=cfg.SEED_MAX,
+                value=cfg.SIMULATION_SEED_DEFAULT,
                 step=1,
+                help=tips.SEED,
             )
 
             deadline_penalty_weight = st.slider(
                 "Deadline penalty weight",
-                min_value=0.0,
-                max_value=10.0,
-                value=1.0,
+                min_value=cfg.DEADLINE_WEIGHT_MIN,
+                max_value=cfg.DEADLINE_WEIGHT_MAX,
+                value=cfg.SIMULATION_DEADLINE_WEIGHT_DEFAULT,
                 step=0.5,
+                help=tips.DEADLINE_WEIGHT,
             )
 
             run_requested = st.form_submit_button("Run simulation")
-
+            validation_message_box = st.empty()
     if run_requested:
+        validation_message_box.empty()
         try:
-            result, summary = run_simulation_from_controls(
+            validation_errors = validate_simulation_controls(
                 scheduler_name=scheduler_name,
-                num_nodes=int(num_nodes),
                 horizon=int(horizon),
+                num_nodes=int(num_nodes),
                 arrival_rate=float(arrival_rate),
                 seed=int(seed),
                 deadline_penalty_weight=float(deadline_penalty_weight),
-                time_limit_seconds=(
-                    float(time_limit_seconds)
-                    if time_limit_seconds is not None
-                    else None
-                ),
-                relative_gap=(
-                    float(relative_gap)
-                    if relative_gap is not None
-                    else None
-                ),
+                time_limit_seconds=time_limit_seconds,
+                relative_gap=relative_gap,
             )
 
-            st.session_state[SIMULATION_LAST_RESULT_KEY] = {
+            if validation_errors:
+                with validation_message_box.container():
+                    # Build a single clean markdown list
+                    error_bullet_points = "\n".join(f"- {error}" for error in validation_errors)
+                    st.error(
+                        "### Please correct the following controls before running:\n"
+                        f"{error_bullet_points}"
+                    )
+                return
+
+            with st.spinner("Running scheduling simulation..."):
+                result, summary = run_simulation_from_controls(
+                    scheduler_name=scheduler_name,
+                    num_nodes=int(num_nodes),
+                    horizon=int(horizon),
+                    arrival_rate=float(arrival_rate),
+                    seed=int(seed),
+                    deadline_penalty_weight=float(deadline_penalty_weight),
+                    time_limit_seconds=(
+                        float(time_limit_seconds)
+                        if time_limit_seconds is not None
+                        else None
+                    ),
+                    relative_gap=(
+                        float(relative_gap)
+                        if relative_gap is not None
+                        else None
+                    ),
+                )
+
+            st.session_state[cfg.SIMULATION_LAST_RESULT_KEY] = {
                 "result": result,
                 "summary": summary,
                 "scheduler_name": scheduler_name,
@@ -271,16 +411,16 @@ def render_simulation_view() -> None:
                 time_label=datetime.now().strftime("%H:%M:%S"),
             )
 
-            st.session_state[SIMULATION_RUN_HISTORY_KEY].append(history_row)
-            st.session_state[SIMULATION_RUN_HISTORY_KEY] = (
-                st.session_state[SIMULATION_RUN_HISTORY_KEY][-10:]
+            st.session_state[cfg.SIMULATION_RUN_HISTORY_KEY].append(history_row)
+            st.session_state[cfg.SIMULATION_RUN_HISTORY_KEY] = (
+                st.session_state[cfg.SIMULATION_RUN_HISTORY_KEY][-10:]
             )
         except Exception as exc:
-            st.session_state[SIMULATION_LAST_RESULT_KEY] = None
+            st.session_state[cfg.SIMULATION_LAST_RESULT_KEY] = None
             st.error(f"Scheduler run failed: {exc}")
             st.stop()
 
-    last_result = st.session_state[SIMULATION_LAST_RESULT_KEY]
+    last_result = st.session_state[cfg.SIMULATION_LAST_RESULT_KEY]
 
     if last_result is None:
         st.caption("Click Run simulation to generate the first result.")
@@ -379,7 +519,7 @@ def render_simulation_view() -> None:
             hide_index=True,
         )
 
-    run_history = st.session_state[SIMULATION_RUN_HISTORY_KEY]
+    run_history = st.session_state[cfg.SIMULATION_RUN_HISTORY_KEY]
 
     if run_history:
         with st.expander("Recent simulation runs", expanded=False):
