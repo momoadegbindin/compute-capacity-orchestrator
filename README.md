@@ -68,7 +68,7 @@ flowchart LR
   
     %% 3. Output Execution
     subgraph Decisions[Execution engine]
-        direction RL
+        direction LR
         E(Decision<br>Executor)
         G(Keep waiting /<br>defer jobs)
         F(Allocate &<br>run jobs)
@@ -82,7 +82,7 @@ flowchart LR
   
     %% 4. Metrics Logging
     subgraph Analytics[Metrics & telemetry]
-        direction RL
+        direction LR
 	    I(Event logs<br>& metrics)
 	    I --> J(Dashboard<br>& reports)
 	end
@@ -102,7 +102,7 @@ flowchart LR
 
     %% 2. Clean Vertical Loop Body
     subgraph Engine [Simulation Clock Loop]
-        direction TB
+        direction LR
         Tick(Time Loop Step) --> Stream(Stream Job Arrivals<br>From Scenario)
         Stream --> Core[[Invoke Standalone<br>Scheduler Component]]
         Core --> Mutate(Update Cluster State<br>& Log Events)
