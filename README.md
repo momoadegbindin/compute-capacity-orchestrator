@@ -43,52 +43,60 @@ The scheduling core operates as a pure decision engine. It receives a snapshot o
 
 The structural execution path of this standalone scheduler component is mapped out in the flowchart below:
 
+
 ```mermaid
 flowchart LR
     %% 1. Input Stream
-    subgraph W[Workloads]
-       direction TB
-       A@{ shape: docs, label: "Job arrivals"} --> B[(Waiting queue)]
+    subgraph W [Workloads]
+       A[["Job arrivals"]] 
+       B[(Waiting queue)]
+       A --- B
     end
   
-    S(Cluster capacity<br>& network topology) --> D("S<br>C<br>H<br>E<br>D<br>U<br>L<br>E<br>R<br><br>I<br>N<br>T<br>E<br>R<br>F<br>A<br>C<br>E")
+    S("Cluster capacity &<br>network topology") --> D
     B --> D
 
-    %% 2. Policy Choice
-    subgraph P[Scheduling policies]
-        direction RL
-        P1(Greedy rules)
-        P2(Exact / MIP model)
-        P3(Metaheuristics)
-        P4(Hybrid bounded-time<br>policy)
-        P5(Stochastic models<br>with recourse) 
-        P6(Robust optimization<br>formulations)
+    D["S<br>C<br>E<br>D<br>U<br>L<br>E<br>R<br><br>I<br>N<br>T<br>E<br>R<br>F<br>A<br>C<br>E"]
+
+    %% 2. Policy Choice (6x1 Vertical Stack)
+    subgraph P [Scheduling policies]
+        P1("Greedy rules")
+        P2("Exact / MIP model")
+        P3("Metaheuristics")
+        P4("Hybrid bounded-time<br>policy")
+        P5("Stochastic models<br>with recourse") 
+        P6("Robust optimization<br>formulations")
+        
+        %% Invisible links forcing a single 6x1 vertical column
+        P1 ~~~ P2 ~~~ P3 ~~~ P4 ~~~ P5 ~~~ P6
     end
     D --> P
   
     %% 3. Output Execution
-    subgraph Decisions[Execution engine]
-        direction LR
-        E(Decision<br>Executor)
-        G(Keep waiting /<br>defer jobs)
-        F(Allocate &<br>run jobs)
-        H(Update<br>cluster state)
+    subgraph Decisions [Execution engine]
+        E("Decision<br>Executor")
+        G("Keep waiting /<br>defer jobs")
+        F("Allocate &<br>run jobs")
+        H("Update<br>cluster state")
         E --> G
         E --> F
         F --> H
     end 
-    P -->  V("S<br>C<br>H<br>E<br>D<br>U<br>L<br>E<br>R<br><br>V<br>A<br>L<br>I<br>D<br>A<br>T<br>O<br>R")
+    P --> V
     V --> E
+
+    V["S<br>C<br>E<br>D<br>U<br>L<br>E<br>R<br><br>V<br>A<br>L<br>I<br>D<br>A<br>T<br>O<br>R"]
   
     %% 4. Metrics Logging
-    subgraph Analytics[Metrics & telemetry]
-        direction LR
-	    I(Event logs<br>& metrics)
-	    I --> J(Dashboard<br>& reports)
+    subgraph Analytics [Metrics & telemetry]
+	    I("Event logs<br>& metrics")
+	    J("Dashboard<br>& reports")
+	    I --> J
 	end
 	E --> I
 
 ```
+
 
 Before a scheduling decision is applied, CCO validates it against the snapshot that produced it. The validator checks that all referenced jobs and nodes exist, every queued job is accounted for, started jobs receive their full GPU demand, and node capacity is not exceeded. A validated decision is then passed to the decision executor, which updates queue and cluster state and emits events for the metrics layer.
 
@@ -98,19 +106,21 @@ The internal clock loop and data mutations managed by the simulation engine are 
 ```mermaid
 flowchart LR
     %% 1. Ingestion Phase
-     Start[Initialize Simulation <br> & <br>Load Workload Scenario ]
+    Start[Initialize Simulation <br> & <br>Load Workload Scenario ]
 
     %% 2. Clean Vertical Loop Body
     subgraph Engine [Simulation Clock Loop]
-        direction LR
         Tick(Time Loop Step) --> Stream(Stream Job Arrivals<br>From Scenario)
         Stream --> Core[[Invoke Standalone<br>Scheduler Component]]
         Core --> Mutate(Update Cluster State<br>& Log Events)
-        Mutate -->|Next Tick| Tick
     end
 
     %% 3. Pure Analytical Outflow
     Start --> Tick
+    
+    %% Loop connection placed outside the subgraph definition to prevent rendering bugs
+    Mutate -->|Next Tick| Tick
+    
     Mutate -->|Simulation Complete| Eval[Compile Metrics & Telemetry <br> + <br> Generate Evaluation Profiles<br>& Performance Traces]
 
 ```
